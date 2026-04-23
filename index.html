@@ -689,7 +689,22 @@ var activeCameraScanner = null;
 var activeCameraScanTarget = null;
 
 function startCameraScan(target) {
-  stopCameraScan(false);
+  // Make sure any previous scanner is fully stopped first
+  if (activeCameraScanner) {
+    activeCameraScanner.stop().then(function() {
+      activeCameraScanner.clear();
+      activeCameraScanner = null;
+      setTimeout(function() { doStartCamera(target); }, 300);
+    }).catch(function() {
+      activeCameraScanner = null;
+      setTimeout(function() { doStartCamera(target); }, 300);
+    });
+  } else {
+    doStartCamera(target);
+  }
+}
+
+function doStartCamera(target) {
   activeCameraScanTarget = target;
   var readerId = 'camera-reader-' + target;
   var readerEl = document.getElementById(readerId);
@@ -702,7 +717,6 @@ function startCameraScan(target) {
   var cancelBtn = document.getElementById('cancel-scan-' + target);
   if (cancelBtn) cancelBtn.addEventListener('click', function() { stopCameraScan(true); });
 
-  // Hide the scan button while camera is active
   var wrapEl = readerEl.previousElementSibling;
   if (wrapEl && wrapEl.classList.contains('camera-scanner-wrap')) wrapEl.classList.add('hidden');
 
@@ -733,8 +747,16 @@ function startCameraScan(target) {
     function onScanFailure() { /* keep trying */ }
   ).catch(function(err) {
     console.error('Camera start failed:', err);
-    showToast('Camera error: ' + (err.message || err));
-    stopCameraScan(true);
+    // Auto-retry once after a short delay
+    if (!target._retried) {
+      target._retried = true;
+      showToast('Retrying camera...');
+      activeCameraScanner = null;
+      setTimeout(function() { doStartCamera(activeCameraScanTarget || target); }, 500);
+    } else {
+      showToast('Camera error — tap the button to try again');
+      stopCameraScan(true);
+    }
   });
 }
 
