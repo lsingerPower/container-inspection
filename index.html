@@ -733,43 +733,86 @@ function doStartCamera(target) {
   if (wrapEl && wrapEl.classList.contains('camera-scanner-wrap')) wrapEl.classList.add('hidden');
 
   var viewfinderId = 'camera-vf-' + target;
-  activeCameraScanner = new Html5Qrcode(viewfinderId);
 
-  var config = {
-    fps: 10,
-    qrbox: function(vw, vh) {
-      return { width: Math.floor(vw * 0.8), height: Math.floor(vh * 0.5) };
-    },
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.ITF,
-      Html5QrcodeSupportedFormats.CODE_128
-    ]
-  };
-
-  activeCameraScanner.start(
-    { facingMode: 'environment' },
-    config,
-    function onScanSuccess(decodedText) {
-      applyCameraScan(target, decodedText.trim());
-    },
-    function onScanFailure() { /* keep trying */ }
-  ).catch(function(err) {
-    console.error('Camera start failed:', err);
-    // Auto-retry once after a short delay
-    if (!target._retried) {
-      target._retried = true;
-      showToast('Retrying camera...');
-      activeCameraScanner = null;
-      setTimeout(function() { doStartCamera(activeCameraScanTarget || target); }, 500);
-    } else {
-      showToast('Camera error — tap the button to try again');
-      stopCameraScan(true);
+  // Try live camera first, fall back to file-based scanning
+  Html5Qrcode.getCameras().then(function(cameras) {
+    if (!cameras || cameras.length === 0) {
+      showToast('No camera found — use photo mode');
+      switchToPhotoMode(target);
+      return;
     }
+    activeCameraScanner = new Html5Qrcode(viewfinderId);
+    var config = {
+      fps: 10,
+      qrbox: function(vw, vh) {
+        return { width: Math.floor(vw * 0.8), height: Math.floor(vh * 0.5) };
+      },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.CODE_128
+      ]
+    };
+    activeCameraScanner.start(
+      { facingMode: 'environment' },
+      config,
+      function onScanSuccess(decodedText) {
+        applyCameraScan(target, decodedText.trim());
+      },
+      function onScanFailure() { /* keep trying */ }
+    ).catch(function(err) {
+      console.error('Live camera failed, switching to photo mode:', err);
+      activeCameraScanner = null;
+      switchToPhotoMode(target);
+    });
+  }).catch(function(err) {
+    console.error('getCameras failed, switching to photo mode:', err);
+    switchToPhotoMode(target);
   });
+}
+
+function switchToPhotoMode(target) {
+  var readerId = 'camera-reader-' + target;
+  var readerEl = document.getElementById(readerId);
+  if (!readerEl) return;
+  readerEl.classList.remove('hidden');
+  readerEl.innerHTML = '<div style="text-align:center;padding:20px;background:#f8f9fa;border-radius:8px;margin-bottom:10px">' +
+    '<p style="margin-bottom:12px;font-size:14px;color:#555">Take a photo of the barcode:</p>' +
+    '<label class="btn btn-primary" style="display:inline-block;width:auto;padding:14px 30px;cursor:pointer">' +
+    '📷 Open Camera' +
+    '<input type="file" accept="image/*" capture="environment" id="barcode-photo-' + target + '" style="display:none">' +
+    '</label></div>' +
+    '<button class="btn-cancel-scan" id="cancel-scan-' + target + '">✕ Cancel</button>';
+  
+  var cancelBtn = document.getElementById('cancel-scan-' + target);
+  if (cancelBtn) cancelBtn.addEventListener('click', function() { stopCameraScan(true); });
+  
+  var photoInput = document.getElementById('barcode-photo-' + target);
+  if (photoInput) {
+    photoInput.addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      showLoading('Reading barcode from photo...');
+      var html5Qr = new Html5Qrcode('camera-vf-temp-' + target);
+      // Create a temp div for scanning
+      var tempDiv = document.createElement('div');
+      tempDiv.id = 'camera-vf-temp-' + target;
+      tempDiv.style.display = 'none';
+      document.body.appendChild(tempDiv);
+      html5Qr.scanFile(file, true).then(function(decodedText) {
+        hideLoading();
+        document.body.removeChild(tempDiv);
+        applyCameraScan(target, decodedText.trim());
+      }).catch(function(err) {
+        hideLoading();
+        document.body.removeChild(tempDiv);
+        showToast('Could not read barcode from photo — try again');
+      });
+    });
+  }
 }
 
 function applyCameraScan(target, barcode) {
