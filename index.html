@@ -663,6 +663,18 @@ function saveCurrentItem() {
 
 // ===== INIT =====
 function init() {
+  // Request camera permission upfront so it's ready for scanning
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(function(stream) {
+        // Permission granted — stop the stream immediately, we just needed the permission
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        console.log('Camera permission granted');
+      })
+      .catch(function(err) {
+        console.log('Camera permission not yet granted:', err.message);
+      });
+  }
   render();
   loadLookupData();
 }
