@@ -464,12 +464,10 @@ function bindEvents() {
   if (finishEarly) finishEarly.addEventListener('click', function() {
     if (state.results.length === 0) {
       if (confirm('No items saved yet. Are you sure you want to finish?')) {
-        state.screen = 'summary';
-        render();
+        resetToStart();
       }
     } else {
-      state.screen = 'summary';
-      render();
+      resetToStart();
     }
   });
   
@@ -483,20 +481,23 @@ function bindEvents() {
   
   const finishAll = document.getElementById('finish-all');
   if (finishAll) finishAll.addEventListener('click', function() {
-    state.screen = 'summary';
-    render();
+    resetToStart();
   });
   
   const newInsp = document.getElementById('new-inspection');
   if (newInsp) newInsp.addEventListener('click', function() {
-    state = {
-      screen: 'start', inspector: state.inspector, container: '', poNumbers: [], poInput: '',
-      lookupData: state.lookupData, lookupLoaded: state.lookupLoaded,
-      currentItem: 0, selectedPO: '', masterBarcode: '', innerBarcode: '', itemBarcode: '',
-      photos: {}, identifiedItem: null, hasInner: true, step: 0, results: [], lastResult: null
-    };
-    render();
+    resetToStart();
   });
+}
+
+function resetToStart() {
+  state = {
+    screen: 'start', inspector: state.inspector, container: '', poNumbers: [], poInput: '',
+    lookupData: state.lookupData, lookupLoaded: state.lookupLoaded,
+    currentItem: 0, selectedPO: '', masterBarcode: '', innerBarcode: '', itemBarcode: '',
+    photos: {}, identifiedItem: null, hasInner: true, step: 0, results: [], lastResult: null
+  };
+  render();
 }
 
 function addPO() {
