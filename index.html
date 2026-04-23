@@ -529,6 +529,28 @@ function resetItemState() {
   state.step = 0;
 }
 
+// Fuzzy barcode matching — handles check digit differences
+// Compares with and without last digit, and zero-padded variants
+function fuzzyBarcodeMatch(scanned, expectedArray) {
+  if (!expectedArray || expectedArray.length === 0) return false;
+  var s = scanned.trim();
+  if (!s) return false;
+  for (var i = 0; i < expectedArray.length; i++) {
+    var e = expectedArray[i].trim();
+    if (s === e) return true;
+    // Scanned without check digit matches expected without check digit
+    if (s.length > 6 && e.length > 6 && s.slice(0, -1) === e.slice(0, -1)) return true;
+    // Scanned is one digit shorter (missing check digit)
+    if (s.length === e.length - 1 && e.slice(0, -1) === s) return true;
+    // Scanned is one digit longer (extra check digit)
+    if (s.length === e.length + 1 && s.slice(0, -1) === e) return true;
+    // Zero-padded: 12-digit UPC vs 13-digit EAN (leading zero)
+    if (s.length === 12 && e.length === 13 && e.charAt(0) === '0' && e.slice(1) === s) return true;
+    if (s.length === 13 && e.length === 12 && s.charAt(0) === '0' && s.slice(1) === e) return true;
+  }
+  return false;
+}
+
 function identifyItem(barcode) {
   if (barcode.trim().length < 6) {
     state.identifiedItem = null;
@@ -538,7 +560,7 @@ function identifyItem(barcode) {
   const clean = barcode.trim();
   for (var i = 0; i < state.lookupData.length; i++) {
     var entry = state.lookupData[i];
-    if (entry.masterUpc.indexOf(clean) !== -1 || entry.upc.indexOf(clean) !== -1) {
+    if (fuzzyBarcodeMatch(clean, entry.masterUpc) || fuzzyBarcodeMatch(clean, entry.upc)) {
       state.identifiedItem = entry;
       state.hasInner = entry.hasInner;
       return;
